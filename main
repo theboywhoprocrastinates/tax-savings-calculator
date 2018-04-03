@@ -1,0 +1,135 @@
+library(shiny)
+library(DT)
+library(ggplot2)
+
+calc_tax = function(income) {
+  if (income <= 22000) {
+    tax = 0
+  } else if (income > 22000 & income <= 30000) {
+    tax = (income - 20000) * 0.02
+  } else if (income > 30000 & income <= 40000) {
+    tax = (income - 30000) * 0.035 + 200
+  } else if (income > 40000 & income <= 80000) {
+    tax = (income - 40000) * 0.07 + 550
+  } else if (income > 80000 & income <= 120000) {
+    tax = (income - 80000) * 0.115 + 3350
+  } else if (income > 120000 & income <= 160000) {
+    tax = (income - 120000) * 0.15 + 7950
+  } else if (income > 160000 & income <= 200000) {
+    tax = (income - 160000) * 0.18 + 13950
+  } else if (income > 200000 & income <= 240000) {
+    tax = (income - 200000) * 0.19 + 21150
+  } else if (income > 240000 & income <= 280000) {
+    tax = (income - 240000) * 0.195 + 28750
+  } else if (income > 280000 & income <= 320000) {
+    tax = (income - 280000) * 0.2 + 36550
+  } else if (income > 320000) {
+    tax = (income - 320000) * 0.22 + 44550
+  }
+  return (tax)
+}
+
+calc_max_tax_savings = function(income1,income2,relief) {
+  max_tax_savings = 0
+  df=data.frame()
+  for (i in 0:relief) {
+    tax_savings1 = round(calc_tax(income1),5) - round(calc_tax(income1 - i),5)
+    tax_savings2 = round(calc_tax(income2),5) - round(calc_tax(income2 - relief + i),5)
+    total_tax_savings = tax_savings1 + tax_savings2
+    max_tax_savings = max(max_tax_savings, total_tax_savings)
+  }
+  
+  for (i in 0:relief) {
+    tax_savings1 = round(calc_tax(income1),5) - round(calc_tax(income1 - i),5)
+    tax_savings2 = round(calc_tax(income2),5) - round(calc_tax(income2 - relief + i),5)
+    total_tax_savings = tax_savings1 + tax_savings2
+    if (round(max_tax_savings,3) == round(total_tax_savings,3)) {
+      df = rbind(df, c(i,relief-i))
+    }
+  }
+  colnames(df) = c("Relief to be claimed by Person1","Relief to be claimed by Person2")
+  testlist=list("a" = max_tax_savings, "b" = df)
+  return(testlist)
+}
+
+ui =shinyUI(fluidPage(
+  titlePanel("Tax Savings Calculator"),
+  navbarPage("",
+  tabPanel("Calculation",
+           sidebarLayout(
+             sidebarPanel(
+    
+    helpText(p("The purpose of this calculator is to compute the maximum tax savings for Parent Relief shared between 2 claimants. 
+               Maxiumum tax savings is defined as the difference between total tax payable before applying Parent Relief and the total tax payable after applying Parent Relief"), 
+             p("The Net Chargeable Income to be inputted is the net chargeable income before applying Parent Relief."),
+             p("Under the Table tab, the calculator computes all possible combination of the relief shared between 2 claimants.")),
+    
+    numericInput(
+      inputId = "income1",
+      label = strong("Net Chargeable Income of Person1:"),
+      value = NULL
+    ),
+    
+    numericInput(
+      inputId = "income2",
+      label = strong("Net Chargeable Income of Person2:"),
+      value = NULL
+    ),
+    
+    numericInput(
+      inputId = "relief",
+      label = strong("Relief:"),
+      value = NULL
+    ),
+    
+    actionButton(inputId = "AB", label = "Calculate"),
+    actionButton("reset", "Clear")
+  ),
+  
+  mainPanel(
+    h4("Maximum Tax Savings"),
+    verbatimTextOutput("max"),
+    hr(),
+    h4("Graph of Possible Relief Combinations to achieve Maximum Tax Savings"),
+    plotOutput("plot"),
+    verbatimTextOutput("summary"))
+  )
+           ),
+  tabPanel("Table",
+           h4("Possible Relief Combinations to achieve Maximum Tax Savings"),
+           DT::dataTableOutput("table"))
+  )
+))
+
+
+server = function(input, output,session) {
+  
+  v <- reactiveValues()
+  
+  observeEvent(input$AB,{
+    req(input$income1,input$income2,input$relief)
+    v$calculatedValue <- calc_max_tax_savings(income1 = input$income1, income2 = input$income2, relief = input$relief)
+  })
+  observeEvent(input$reset, {
+    v$calculatedValue <- NULL
+  })  
+  output$max <- renderText({
+    paste(v$calculatedValue$a)
+  })
+  output$table <- DT::renderDataTable({
+    v$calculatedValue$b
+  })
+  output$plot <- renderPlot({
+    if (!is.null(v$calculatedValue$b)) {
+    plot(v$calculatedValue$b)
+    }
+  })
+  output$summary <- renderPrint({
+      summary(v$calculatedValue$b)
+  })
+  output$summary <- renderPrint({
+    summary(v$calculatedValue$b)
+  })
+}
+
+shinyApp(ui, server)
